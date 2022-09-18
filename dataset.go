@@ -8,7 +8,7 @@ import (
 )
 
 type (
-	DType = float32
+	DType = float64
 
 	Class  int
 	Column []DType

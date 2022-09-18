@@ -1,8 +1,8 @@
 package bayes
 
 import (
-	"github.com/WinPooh32/math"
 	"github.com/WinPooh32/ml"
+	"github.com/WinPooh32/series/math"
 )
 
 type (
@@ -32,8 +32,8 @@ func New(classes []string, prob []DType, featuresDim int) *NaiveBayes {
 }
 
 func NewFromDataset(data ml.Dataset) *NaiveBayes {
-	var lables = data.Lables()
-	var distrib = make([]DType, 0, len(lables))
+	lables := data.Lables()
+	distrib := make([]DType, 0, len(lables))
 
 	for _, v := range lables {
 		distrib = append(distrib, data.Distribution(v))
@@ -43,7 +43,7 @@ func NewFromDataset(data ml.Dataset) *NaiveBayes {
 
 	nb := New(lables, distrib, len(class))
 
-	var ds = make([][]Column, 0, len(lables))
+	ds := make([][]Column, 0, len(lables))
 	for _, v := range lables {
 		class, _, _ := data.Class(v)
 		ds = append(ds, class)
@@ -52,14 +52,6 @@ func NewFromDataset(data ml.Dataset) *NaiveBayes {
 	nb.Fit(ds)
 
 	return nb
-}
-
-func makeRows(n int, dim int) []Row {
-	m := make([]Row, n)
-	for i := 0; i < n; i++ {
-		m[Class(i)] = make(Row, dim)
-	}
-	return m
 }
 
 func (nb *NaiveBayes) SetProb(prob []DType) {
@@ -93,15 +85,22 @@ func (nb *NaiveBayes) PredictTo(probs []DType, object []DType) {
 		panic("mismatched diminitions!")
 	}
 
-	var sum DType
-
 	for class := range nb.classes {
 		proba := clProbs[class]
 		means := clMeans[class]
 		variances := clVaris[class]
 		p := nb.calcPosterior(proba, object, means, variances)
-		sum += p
 		probs[class] = p
+	}
+
+	sum := nb.sumExp(probs)
+
+	for i, v := range probs {
+		v = math.Exp(v)
+		q := math.Log(v / (sum - v))
+		exp := math.Exp(q)
+
+		probs[i] = exp / (1 + exp)
 	}
 
 	clCount = len(nb.classes)
@@ -124,23 +123,17 @@ func (nb *NaiveBayes) calcPosterior(
 		panic("bad size")
 	}
 
-	p = -math.Log2(proba)
+	p = math.Log(proba)
 
 	for feat := 0; feat < size; feat++ {
 		value := object[feat]
 		mean := means[feat]
-
 		vari := variances[feat]
 		if vari == 0 {
 			continue
 		}
-
 		g := nb.calcGauss(value, mean, vari)
-		if g == 0 {
-			continue
-		}
-
-		p -= math.Log2(g)
+		p += math.Log1p(g)
 	}
 
 	return p
@@ -154,10 +147,9 @@ func (nb *NaiveBayes) calcGauss(val DType, mean DType, vari DType) DType {
 }
 
 func (nb *NaiveBayes) calcMean(col Column) DType {
-	var c = 1.0 / DType(len(col))
 	var mean DType = 0.0
 	for _, val := range col {
-		mean += val * c
+		mean += val / DType(len(col))
 	}
 	return mean
 }
@@ -170,4 +162,19 @@ func (nb *NaiveBayes) calcVariance(col Column, mean DType) DType {
 		vari += s * s * c
 	}
 	return vari
+}
+
+func (nb *NaiveBayes) sumExp(values []DType) (s DType) {
+	for _, v := range values {
+		s += math.Exp(v)
+	}
+	return s
+}
+
+func makeRows(n int, dim int) []Row {
+	m := make([]Row, n)
+	for i := 0; i < n; i++ {
+		m[Class(i)] = make(Row, dim)
+	}
+	return m
 }
